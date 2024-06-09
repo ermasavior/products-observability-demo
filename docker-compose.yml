@@ -1,0 +1,79 @@
+version: '3.9'
+services:
+  api:
+    build:
+      context: .
+    command: ["./products"]
+    environment:
+      - ENV_VARIABLE=value
+    env_file:
+      - .env
+    expose:
+      - "9999"
+    ports:
+      - "9999:9999"
+    restart: always
+  postgres:
+    image: postgres:alpine3.20
+    command: postgres -c 'max_connections=500'
+    environment:
+      POSTGRES_DB: products
+      POSTGRES_USER: products
+      POSTGRES_PASSWORD: products
+    expose:
+      - "5432"
+    ports:
+      - "5436:5432"
+    restart: always
+    volumes:
+      - postgres:/var/lib/postgresql/data/
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    expose:
+      - "16686"
+    ports:
+      - 5775:5775/udp
+      - 6831:6831/udp
+      - 6832:6832/udp
+      - 5778:5778
+      - 16686:16686
+      - 14268:14268
+      - 9411:9411
+    restart: always
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    expose:
+      - "4317"
+    ports:
+      - "1888:1888"   # pprof extension
+      - "8888:8888"   # Prometheus metrics exposed by the collector
+      - "8889:8889"   # Prometheus exporter metrics
+      - "13133:13133" # health_check extension
+      - "4317:4317"   # OTLP gRPC receiver
+      - "55679:55679" # zpages extension
+    volumes:
+      - "${PWD}/deploy/observability:/observability"
+      - ./deploy/observability/secrets/otel-collector.json:/etc/otel/key.json
+    command: --config=/observability/otel-config.yaml
+    restart: always
+    depends_on:
+      - jaeger
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - 3000:3000
+    volumes:
+      - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning
+      - ./deploy/observability/grafana/dashboards:/etc/grafana/demo-dashboards
+      - grafana_data:/var/lib/grafana
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - "./deploy/observability/prometheus.yaml:/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+
+volumes:
+  postgres:
+  grafana_data:
+  prometheus_data:
