@@ -4,6 +4,7 @@ import (
 	"context"
 	"products-observability/internal/modules/orders/model"
 	"products-observability/pkg/logger"
+	"products-observability/pkg/utils"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -15,7 +16,7 @@ func (r *Repository) DecreaseProductStock(ctx context.Context, req model.CreateO
 
 	currentTime := time.Now()
 
-	tx, ok := ctx.Value("db-tx").(*sqlx.Tx)
+	tx, ok := ctx.Value(utils.DBTxType).(*sqlx.Tx)
 	if !ok {
 		_, err = tx.ExecContext(ctx, decreaseProductStockQuery, req.Total, currentTime, req.ProductID)
 	} else {

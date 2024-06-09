@@ -3,6 +3,7 @@ package logger
 import (
 	"context"
 	"fmt"
+	"products-observability/pkg/utils"
 	"runtime"
 	"time"
 
@@ -34,7 +35,7 @@ func InitLogger(appName string, env string) {
 }
 
 func initBaseLoggerFields(ctx context.Context) []zapcore.Field {
-	traceID, ok := ctx.Value(TraceID).(string)
+	traceID, ok := ctx.Value(utils.TraceID).(string)
 	if !ok {
 		traceID = uuid.NewString()
 	}

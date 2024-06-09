@@ -8,6 +8,9 @@ import (
 )
 
 func (u *Usecase) CreateOrder(ctx context.Context, req model.CreateOrderRequest) (model.Order, error) {
+	ctx, span := u.Telemetry.Tracer.Start(ctx, "orders.CreateOrder")
+	defer span.End()
+
 	var err error
 
 	ctx, err = u.Repository.BeginTx(ctx)
@@ -39,6 +42,8 @@ func (u *Usecase) CreateOrder(ctx context.Context, req model.CreateOrderRequest)
 	}
 
 	u.Repository.FinishTx(ctx)
+
+	u.Telemetry.OrderCounter.Add(ctx, 1)
 
 	return res, nil
 }

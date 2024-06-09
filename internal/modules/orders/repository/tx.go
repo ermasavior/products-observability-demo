@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"products-observability/pkg/logger"
+	"products-observability/pkg/utils"
 
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
@@ -16,12 +17,12 @@ func (r *Repository) BeginTx(ctx context.Context) (context.Context, error) {
 		return ctx, err
 	}
 
-	ctx = context.WithValue(ctx, "db-tx", tx)
+	ctx = context.WithValue(ctx, utils.DBTxType, tx)
 	return ctx, nil
 }
 
 func (r *Repository) FinishTx(ctx context.Context) error {
-	tx, ok := ctx.Value("db-tx").(*sqlx.Tx)
+	tx, ok := ctx.Value(utils.DBTxType).(*sqlx.Tx)
 	if !ok {
 		return errors.New("tx not found")
 	}
@@ -35,7 +36,7 @@ func (r *Repository) FinishTx(ctx context.Context) error {
 }
 
 func (r *Repository) RollbackTx(ctx context.Context) error {
-	tx, ok := ctx.Value("db-tx").(*sqlx.Tx)
+	tx, ok := ctx.Value(utils.DBTxType).(*sqlx.Tx)
 	if !ok {
 		return errors.New("tx not found")
 	}

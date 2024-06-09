@@ -5,13 +5,12 @@ import (
 
 	"products-observability/internal/modules/orders/model"
 	repository "products-observability/internal/modules/orders/repository"
-
-	"github.com/newrelic/go-agent/v3/newrelic"
+	"products-observability/internal/modules/orders/utils"
 )
 
 type Usecase struct {
-	NewRelic   *newrelic.Application
 	Repository repository.OrderRepository
+	Telemetry  utils.Telemetry
 }
 
 type OrderUsecase interface {

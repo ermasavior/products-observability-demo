@@ -7,6 +7,7 @@ import (
 	"products-observability/pkg/db"
 	httpPkg "products-observability/pkg/http"
 	"products-observability/pkg/logger"
+	"products-observability/pkg/telemetry"
 )
 
 func main() {
@@ -18,6 +19,11 @@ func main() {
 		Port:     cfg.DbPort,
 		Db:       cfg.DbName,
 	})
+	defer pgDb.Close()
+
+	tele := telemetry.InitTelemetryGlobal(cfg.AppName, cfg.OTLPEndpoint)
+	defer telemetry.ShutdownTelemetryProviders(context.Background(), tele)
+
 	logger.InitLogger(cfg.AppName, cfg.AppEnv)
 	server := httpPkg.NewHTTPServer(cfg.AppName)
 

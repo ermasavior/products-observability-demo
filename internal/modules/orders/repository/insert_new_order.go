@@ -6,6 +6,7 @@ import (
 
 	"products-observability/internal/modules/orders/model"
 	"products-observability/pkg/logger"
+	"products-observability/pkg/utils"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -30,7 +31,7 @@ func (r *Repository) InsertNewOrder(ctx context.Context, req model.CreateOrderRe
 		CreatedAt: currentTime.Format(time.RFC3339),
 	}
 
-	tx, ok := ctx.Value("db-tx").(*sqlx.Tx)
+	tx, ok := ctx.Value(utils.DBTxType).(*sqlx.Tx)
 	if !ok {
 		rows, err = r.DB.NamedQuery(insertOrderQuery, newOrder)
 	} else {

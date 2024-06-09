@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"context"
-	"products-observability/pkg/logger"
+	"products-observability/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -11,7 +11,7 @@ import (
 func TraceLoggerHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		traceID := uuid.NewString()
-		ctx := context.WithValue(c.Request.Context(), logger.TraceID, traceID)
+		ctx := context.WithValue(c.Request.Context(), utils.TraceID, traceID)
 
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
