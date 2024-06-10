@@ -10,10 +10,15 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/uptrace/opentelemetry-go-extra/otelsql"
+	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
 func NewPostgresDB(pgDsn PostgresDsn) *sqlx.DB {
-	db, err := sqlx.Open("postgres", pgDsn.ToString())
+	db, err := otelsqlx.Open(
+		"postgres", pgDsn.ToString(),
+		otelsql.WithAttributes(semconv.DBSystemPostgreSQL))
 	if err != nil {
 		logger.Fatal(context.Background(), err.Error())
 	}

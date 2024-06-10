@@ -2,57 +2,95 @@ package telemetry
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"products-observability/pkg/logger"
-	"products-observability/pkg/telemetry/metric"
-	metricExporter "products-observability/pkg/telemetry/metric/exporter"
-	"products-observability/pkg/telemetry/trace"
-	traceExporter "products-observability/pkg/telemetry/trace/exporter"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/metric/global"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-type Telemetry struct {
-	MetricCloseFn metric.CloseFunc
-	TraceCloseFn  trace.CloseFunc
+// SetupOTelSDK bootstraps the OpenTelemetry pipeline.
+// If it does not return an error, make sure to call shutdown for proper cleanup.
+func SetupOTelSDK(ctx context.Context, appName, otelAddress string) (shutdown func(context.Context) error, err error) {
+	var shutdownFuncs []func(context.Context) error
+
+	// shutdown calls cleanup functions registered via shutdownFuncs.
+	// shutdown will flush any remaining spans and shut down the exporter.
+	// The errors from the calls are joined.
+	// Each registered cleanup will be invoked once.
+	shutdown = func(ctx context.Context) error {
+		var err error
+		for _, fn := range shutdownFuncs {
+			err = errors.Join(err, fn(ctx))
+		}
+		shutdownFuncs = nil
+		return err
+	}
+
+	// handleErr calls shutdown for cleanup and makes sure that all errors are returned.
+	handleErr := func(inErr error) {
+		err = errors.Join(inErr, shutdown(ctx))
+	}
+
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			// The service name used to display traces in backends
+			semconv.ServiceNameKey.String(appName),
+		),
+	)
+	if err != nil {
+		logger.Fatal(ctx, "error init otel resource")
+	}
+
+	conn, err := initConn(otelAddress)
+	if err != nil {
+		logger.Fatal(ctx, "error init otel connection")
+	}
+
+	// Set up propagator.
+	prop := newPropagator()
+	otel.SetTextMapPropagator(prop)
+
+	// Set up trace provider.
+	tracerProviderFn, err := initTracerProvider(ctx, res, conn)
+	if err != nil {
+		handleErr(err)
+		return
+	}
+	shutdownFuncs = append(shutdownFuncs, tracerProviderFn)
+
+	// Set up meter provider.
+	meterProviderFn, err := initMeterProvider(ctx, res, conn)
+	if err != nil {
+		handleErr(err)
+		return
+	}
+	shutdownFuncs = append(shutdownFuncs, meterProviderFn)
+
+	return
 }
 
-func InitTelemetryGlobal(name, endpoint string) Telemetry {
-	metricExp := metricExporter.NewOTLP(endpoint)
-	pusher, pusherCloseFn, err := metric.NewMeterProviderBuilder().
-		SetExporter(metricExp).
-		SetHistogramBoundaries([]float64{5, 10, 25, 50, 100, 200, 400, 800, 1000}).
-		Build()
+func initConn(otelAddress string) (*grpc.ClientConn, error) {
+	conn, err := grpc.NewClient(
+		otelAddress,
+		// Note the use of insecure transport here. TLS is recommended in production.
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
-		logger.Fatal(context.Background(), "failed initializing meter provider")
+		return nil, fmt.Errorf("failed to create gRPC connection to collector: %w", err)
 	}
-	global.SetMeterProvider(pusher)
 
-	spanExporter := traceExporter.NewOTLP(endpoint)
-	tracerProvider, tracerProviderCloseFn, err := trace.NewTraceProviderBuilder(name).
-		SetExporter(spanExporter).
-		Build()
-	if err != nil {
-		logger.Fatal(context.Background(), "failed initializing tracer provider")
-	}
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	otel.SetTracerProvider(tracerProvider)
-
-	return Telemetry{
-		MetricCloseFn: pusherCloseFn,
-		TraceCloseFn:  tracerProviderCloseFn,
-	}
+	return conn, err
 }
 
-func ShutdownTelemetryProviders(ctx context.Context, t Telemetry) {
-	err := t.MetricCloseFn(ctx)
-	if err != nil {
-		logger.Error(ctx, "unable to close metric provider")
-	}
-
-	err = t.TraceCloseFn(ctx)
-	if err != nil {
-		logger.Error(ctx, "unable to close tracer provider")
-	}
+func newPropagator() propagation.TextMapPropagator {
+	return propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	)
 }

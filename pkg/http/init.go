@@ -2,20 +2,20 @@ package http
 
 import (
 	"products-observability/pkg/http/middleware"
+	"products-observability/pkg/telemetry/otelginmetrics"
 	"reflect"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 // NewHTTPServer returns gin http server
-func NewHTTPServer(ginMode string) *gin.Engine {
-	if ginMode == gin.ReleaseMode {
-		gin.SetMode(ginMode)
-	} else if ginMode == gin.TestMode {
-		gin.SetMode(ginMode)
+func NewHTTPServer(appName, appEnv string) *gin.Engine {
+	if appEnv == "production" {
+		gin.SetMode(gin.ReleaseMode)
 	} else {
 		gin.SetMode(gin.DebugMode)
 	}
@@ -38,6 +38,8 @@ func NewHTTPServer(ginMode string) *gin.Engine {
 	router.Use(gin.Recovery())
 	router.Use(middleware.CorsHandler())
 	router.Use(middleware.TraceLoggerHandler())
+	router.Use(otelgin.Middleware(appName))
+	router.Use(otelginmetrics.Middleware(appName))
 
 	return router
 }

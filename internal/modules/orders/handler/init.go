@@ -23,5 +23,6 @@ func RegisterController(r Domain) {
 		Usecase:  uc,
 	})
 
+	// orderHandler := otelhttp.NewHandler(http.HandlerFunc(h.CreateOrder), "products")
 	r.Router.POST("/orders", h.CreateOrder)
 }

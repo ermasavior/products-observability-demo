@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	orders "products-observability/internal/modules/orders/handler"
 	"products-observability/pkg/configs"
 	"products-observability/pkg/db"
@@ -21,11 +22,17 @@ func main() {
 	})
 	defer pgDb.Close()
 
-	tele := telemetry.InitTelemetryGlobal(cfg.AppName, cfg.OTLPEndpoint)
-	defer telemetry.ShutdownTelemetryProviders(context.Background(), tele)
+	// Set up OpenTelemetry
+	otelShutdown, err := telemetry.SetupOTelSDK(context.Background(), cfg.AppName, cfg.OTLPEndpoint)
+	if err != nil {
+		return
+	}
+	defer func() {
+		err = errors.Join(err, otelShutdown(context.Background()))
+	}()
 
 	logger.InitLogger(cfg.AppName, cfg.AppEnv)
-	server := httpPkg.NewHTTPServer(cfg.AppName)
+	server := httpPkg.NewHTTPServer(cfg.AppName, cfg.AppEnv)
 
 	orders.RegisterController(orders.Domain{
 		Router:   server,
